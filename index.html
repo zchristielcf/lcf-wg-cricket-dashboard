@@ -12,7 +12,7 @@ main{max-width:1600px;margin:auto;padding:22px}.tabs{display:flex;gap:8px;flex-w
 @media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.twocol,.threecol,.detailgrid{grid-template-columns:1fr}.profilekpis{grid-template-columns:repeat(2,1fr)}header img{width:76px;height:76px}h1{font-size:20px}}
 @media(max-width:550px){main{padding:12px}header{padding:10px 14px;gap:12px}header img{width:60px;height:60px}.kpis{grid-template-columns:1fr 1fr}.kpi .value{font-size:24px}.profiletop{align-items:flex-start;flex-direction:column}}
 
-.modalback{position:fixed;inset:0;background:#101820a8;display:none;align-items:center;justify-content:center;padding:20px;z-index:9999}.modalback.open{display:flex}.modal{background:#f7f8fa;border-radius:18px;width:min(1100px,100%);max-height:92vh;overflow:auto;box-shadow:0 25px 80px #0005}.modalhead{position:sticky;top:0;z-index:2;background:linear-gradient(120deg,#a90f29,#e31b35);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}.modalhead h2{margin:0;font-size:26px}.modalhead p{margin:5px 0 0;opacity:.9}.modalclose{border:1px solid #ffffff80;background:#ffffff20;color:#fff;border-radius:8px;font-size:24px;line-height:1;padding:7px 12px;cursor:pointer}.modalbody{padding:20px}.modalbody .grid{margin-bottom:14px}.breaksummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0 16px}.breakmetric{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}.breakmetric b{display:block;font-size:25px;color:var(--red);margin-top:5px}.breakmetric span{font-size:12px;color:var(--muted)}.breakbars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.breakbars .card{padding:15px}.breakbars .barrow{grid-template-columns:minmax(100px,150px) 1fr 32px}.breakheading{margin:20px 0 8px;font-size:16px}@media(max-width:700px){.breaksummary{grid-template-columns:repeat(2,minmax(0,1fr))}.breakbars{grid-template-columns:1fr}.modalbody{padding:12px}.modalhead{padding:16px}}
+.modalback{position:fixed;inset:0;background:#101820a8;display:none;align-items:center;justify-content:center;padding:20px;z-index:10060}.modalback.open{display:flex}.modal{background:#f7f8fa;border-radius:18px;width:min(1100px,100%);max-height:92vh;overflow:auto;box-shadow:0 25px 80px #0005}.modalhead{position:sticky;top:0;z-index:2;background:linear-gradient(120deg,#a90f29,#e31b35);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}.modalhead h2{margin:0;font-size:26px}.modalhead p{margin:5px 0 0;opacity:.9}.modalclose{border:1px solid #ffffff80;background:#ffffff20;color:#fff;border-radius:8px;font-size:24px;line-height:1;padding:7px 12px;cursor:pointer}.modalbody{padding:20px}.modalbody .grid{margin-bottom:14px}.breaksummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0 16px}.breakmetric{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}.breakmetric b{display:block;font-size:25px;color:var(--red);margin-top:5px}.breakmetric span{font-size:12px;color:var(--muted)}.breakbars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.breakbars .card{padding:15px}.breakbars .barrow{grid-template-columns:minmax(100px,150px) 1fr 32px}.breakheading{margin:20px 0 8px;font-size:16px}@media(max-width:700px){.breaksummary{grid-template-columns:repeat(2,minmax(0,1fr))}.breakbars{grid-template-columns:1fr}.modalbody{padding:12px}.modalhead{padding:16px}}
 
 /* Club breakdown redesign: soft cards instead of spreadsheet gridlines */
 #breakdown .tablewrap{border:0;background:transparent;border-radius:0;max-height:none;overflow-x:auto!important;overflow-y:visible!important;min-width:0}
@@ -989,11 +989,6 @@ document.getElementById('devLeadsTable')?.addEventListener('click',e=>{
   });
   return;
  }
- const button=e.target.closest('[data-open-club]');
- if(!button)return;
- const club=decodeURIComponent(button.getAttribute('data-open-club')||'');
- closeDevelopmentOpportunities();
- if(typeof openClub==='function')openClub(club);
 });
 
 function renderDevelopmentPriorities(){
