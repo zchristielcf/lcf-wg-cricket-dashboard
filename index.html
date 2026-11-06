@@ -531,8 +531,8 @@ const D={"girls":[{"Club Name":"Accrington CC","Team Name":"Girls Under 13","Typ
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=x=>Number(x)||0, uniq=a=>[...new Set(a.filter(x=>x!==null&&x!==undefined&&String(x).trim()!==''))].sort((a,b)=>String(a).localeCompare(String(b)));
 const sum=(arr,key)=>arr.reduce((a,r)=>a+num(r[key]),0);
-const CLUB_MASTER_API='https://script.google.com/macros/s/AKfycbz51YCoIkTbzTphRYuInI-E1Zyf5r450MS3zXae8vVjQSjXPeRtNcpoPd92TYR_5RBlFw/exec';let sharedClubMaster={};let clubMasterLoaded=false;let clubMasterStatus='Loading shared club classifications…';
-function loadClubMaster(){return new Promise((resolve,reject)=>{const cb='clubMasterCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);const script=document.createElement('script');const timer=setTimeout(()=>{cleanup();reject(Error('Timed out loading Club Master'));},12000);function cleanup(){clearTimeout(timer);delete window[cb];script.remove()}window[cb]=data=>{cleanup();if(data&&data.success){sharedClubMaster={};(data.clubs||[]).forEach(x=>{if(x.clubName)sharedClubMaster[canonicalClubName(x.clubName)]={clubName:String(x.clubName),localAuthority:String(x.localAuthority||''),league:String(x.league||'')}});clubMasterLoaded=true;clubMasterStatus='Shared classifications loaded';resolve(data)}else reject(Error('Club Master returned an error'))};script.onerror=()=>{cleanup();reject(Error('Could not connect to Club Master'))};script.src=CLUB_MASTER_API+'?callback='+cb+'&_='+Date.now();document.head.appendChild(script)})}
+const CLUB_MASTER_API='https://script.google.com/macros/s/AKfycbz51YCoIkTbzTphRYuInI-E1Zyf5r450MS3zXae8vVjQSjXPeRtNcpoPd92TYR_5RBlFw/exec';let sharedClubMaster={};let clubMasterLoaded=false;let clubMasterStatus='Loading shared club classifications…';let CDO_BY_AUTHORITY={};let CDO_NAMES=[];let sharedDevelopmentFollowups={};
+function loadClubMaster(){return new Promise((resolve,reject)=>{const cb='clubMasterCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);const script=document.createElement('script');const timer=setTimeout(()=>{cleanup();reject(Error('Timed out loading shared dashboard data'));},12000);function cleanup(){clearTimeout(timer);delete window[cb];script.remove()}window[cb]=data=>{cleanup();if(data&&data.success){sharedClubMaster={};(data.clubs||[]).forEach(x=>{if(x.clubName)sharedClubMaster[canonicalClubName(x.clubName)]={clubName:String(x.clubName),localAuthority:String(x.localAuthority||''),league:String(x.league||'')}});CDO_BY_AUTHORITY={};(data.allocations||[]).forEach(x=>{if(x.authority)CDO_BY_AUTHORITY[String(x.authority).trim()]=String(x.cdo||'')});CDO_NAMES=[...new Set(Object.values(CDO_BY_AUTHORITY).filter(Boolean))].sort((a,b)=>a.localeCompare(b));sharedDevelopmentFollowups={};(data.followups||[]).forEach(x=>{if(x.clubName)sharedDevelopmentFollowups[x.clubName]={status:String(x.status||'Not started'),notes:String(x.notes||''),updatedAt:String(x.updatedAt||'')}});clubMasterLoaded=true;clubMasterStatus='Shared dashboard data loaded';resolve(data)}else reject(Error('Google Sheets returned an error'))};script.onerror=()=>{cleanup();reject(Error('Could not connect to the shared Google Sheet'))};script.src=CLUB_MASTER_API+'?callback='+cb+'&_='+Date.now();document.head.appendChild(script)})}
 function sharedMeta(club){return sharedClubMaster[canonicalClubName(club)]||null;}
 // One-way classification sync: fill missing LA/League values in shared Club Master from the dashboard's audited metadata. Existing manual values are preserved by Apps Script.
 async function syncClubMasterClassifications(){try{const payload={action:'sync',clubs:clubs.map(clubName=>({clubName,localAuthority:localAuthorityForClub(clubName),league:leagueForClub(clubName)})).filter(x=>x.clubName&&(x.localAuthority!=='Not recorded'||x.league!=='Not recorded'))};if(!payload.clubs.length)return;await fetch(CLUB_MASTER_API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});console.info('Club Master classification sync sent for',payload.clubs.length,'clubs');}catch(err){console.warn('Club Master classification sync failed:',err)}}
@@ -865,20 +865,7 @@ const devClubData=()=>{
   });
 };
 
-const CDO_BY_AUTHORITY={
- 'Preston':'Lauren Burrows','Lancaster':'Lauren Burrows',
- 'Wyre':'Owen Williams','Fylde':'Owen Williams','Blackpool':'Owen Williams',
- 'Ribble Valley':'Paul Naylor','Hyndburn':'Paul Naylor','Pendle':'Paul Naylor',
- 'Blackburn with Darwen':'John Cordingley','Burnley':'John Cordingley','Rossendale':'John Cordingley',
- 'Chorley':'Eliesha Netherwood','South Ribble':'Eliesha Netherwood',
- 'Sefton':'Darren Leader','West Lancashire':'Darren Leader','St Helens':'Darren Leader',
- 'Liverpool':'Paul Morris','Knowsley':'Paul Morris',
- 'Oldham':'Jamie Sykes','Rochdale':'Jamie Sykes',
- 'Bolton':'Holly Pearson','Salford':'Rory Kellett','Bury':'Rory Kellett',
- 'Trafford':'Ted Simpson','Wigan':'Ted Simpson',
- 'Manchester':'Tom Jenkinson','Tameside':'Tom Jenkinson'
-};
-const CDO_NAMES=[...new Set(Object.values(CDO_BY_AUTHORITY))];
+// CDO allocations are loaded from the shared Google Sheet.
 function cdoForAuthority(authority){return CDO_BY_AUTHORITY[String(authority||'').trim()]||'Unassigned';}
 let developmentOpportunityRows=[];
 function buildDevelopmentOpportunityRows(){
@@ -924,14 +911,18 @@ function closeDevelopmentOpportunities(){
  modal.classList.remove('open');document.body.style.overflow='';
 }
 
-const DEV_FOLLOWUP_STORAGE_KEY='lcfDevelopmentOpportunityFollowups_v1';
-function readDevelopmentFollowups(){
- try{return JSON.parse(localStorage.getItem(DEV_FOLLOWUP_STORAGE_KEY)||'{}')||{};}catch(e){return {};}
-}
-function saveDevelopmentFollowup(club,status,notes){
- const all=readDevelopmentFollowups();
- all[club]={status:status||'Not started',notes:notes||'',updatedAt:new Date().toISOString()};
- try{localStorage.setItem(DEV_FOLLOWUP_STORAGE_KEY,JSON.stringify(all));return true;}catch(e){return false;}
+function readDevelopmentFollowups(){return sharedDevelopmentFollowups||{};}
+async function saveDevelopmentFollowup(club,status,notes){
+ const payload={action:'saveFollowup',clubName:club,status:status||'Not started',notes:notes||''};
+ const response=await fetch(CLUB_MASTER_API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+ // no-cors responses are opaque, so confirm the write by re-reading the shared sheet.
+ for(let attempt=0;attempt<3;attempt++){
+  await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+  await loadClubMaster();
+  const saved=sharedDevelopmentFollowups[club];
+  if(saved&&saved.status===payload.status&&saved.notes===payload.notes)return true;
+ }
+ return false;
 }
 function renderDevelopmentOpportunityModal(){
  const q=(document.getElementById('devLeadsSearch')?.value||'').trim().toLowerCase();
@@ -986,9 +977,16 @@ document.getElementById('devLeadsTable')?.addEventListener('click',e=>{
   const club=decodeURIComponent(saveButton.getAttribute('data-save-followup')||'');
   const status=document.querySelector(`[data-follow-status="${encodeURIComponent(club)}"]`)?.value||'Not started';
   const notes=document.querySelector(`[data-follow-notes="${encodeURIComponent(club)}"]`)?.value||'';
-  const ok=saveDevelopmentFollowup(club,status,notes);
   const message=document.querySelector(`[data-save-message="${encodeURIComponent(club)}"]`);
-  if(message)message.textContent=ok?'Saved on this device':'Could not save';
+  if(message)message.textContent='Saving to shared sheet…';
+  saveDevelopmentFollowup(club,status,notes).then(ok=>{
+   const updatedMessage=document.querySelector(`[data-save-message="${encodeURIComponent(club)}"]`);
+   if(updatedMessage)updatedMessage.textContent=ok?'Saved to shared sheet':'Could not verify save — please refresh and check';
+  }).catch(err=>{
+   console.warn('Shared follow-up save failed:',err);
+   const updatedMessage=document.querySelector(`[data-save-message="${encodeURIComponent(club)}"]`);
+   if(updatedMessage)updatedMessage.textContent='Save failed — check connection';
+  });
   return;
  }
  const button=e.target.closest('[data-open-club]');
