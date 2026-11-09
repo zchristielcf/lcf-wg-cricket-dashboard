@@ -1167,60 +1167,88 @@ function renderYoY(){const metric=document.getElementById('yoyMetric').value;con
 ['acSearch','acFilter','acSort'].forEach(id=>document.getElementById(id)?.addEventListener(id==='acSearch'?'input':'change',renderActionCentre));
 const oldShowTab=showTab;showTab=function(id){oldShowTab(id);if(id==='yoy')renderActionCentre()};
 document.getElementById('acLeagueFilter').addEventListener('change',renderActionCentre);document.getElementById('acLAFilter').addEventListener('change',renderActionCentre);renderActionCentre();
-// Live-first startup: no embedded 2026 snapshot is used. The dashboard initialises only
-// after all four published worksheets have been fetched and validated.
-(async function startDashboardFromLiveSheets(){
-  const statusId='liveDataStatus';
-  let status=document.getElementById(statusId);
+// Live-first startup through Apps Script JSONP. This avoids browser CORS
+// restrictions on direct Google Sheets CSV fetch requests.
+const DASHBOARD_API = "https://script.google.com/macros/s/AKfycbz51YCoIkTbzTphRYuInI-E1Zyf5r450MS3zXae8vVjQSjXPeRtNcpoPd92TYR_5RBlFw/exec";
+function requestDashboardDataJSONP(){
+  return new Promise((resolve,reject)=>{
+    const callbackName='dashboardDataCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{cleanup();reject(new Error('Timed out waiting for Apps Script. Check that the latest web app deployment is accessible.'));},25000);
+    function cleanup(){clearTimeout(timeout);delete window[callbackName];script.remove();}
+    window[callbackName]=data=>{cleanup();if(!data||data.success!==true){reject(new Error(data&&data.error?data.error:'Apps Script returned an unsuccessful response.'));return;}resolve(data);};
+    script.onerror=()=>{cleanup();reject(new Error('Could not load the Apps Script web app. Check its deployment URL and access permissions.'));};
+    script.src=DASHBOARD_API+'?callback='+encodeURIComponent(callbackName)+'&t='+Date.now();
+    document.head.appendChild(script);
+  });
+}
+(async function startDashboardFromAppsScript(){
+  let status=document.getElementById('liveDataStatus');
   if(!status){
     status=document.createElement('div');
-    status.id=statusId;
+    status.id='liveDataStatus';
     status.setAttribute('role','status');
     status.style.cssText='margin:0 0 14px;padding:10px 14px;border-radius:9px;background:#eef6ff;border:1px solid #cfe0f5;color:#24476b;font-size:12px;';
     const main=document.querySelector('main');
     if(main)main.insertBefore(status,main.firstChild);
   }
-  status.textContent='Connecting to the live Google Sheets database…';
   status.style.display='block';
+  status.textContent='Connecting to the live dashboard database through Apps Script…';
   try{
+    const data=await requestDashboardDataJSONP();
     const required=['girls','women','byclub','allstars'];
-    const loaded=await Promise.all(required.map(async key=>{
-      const rows=await fetchPublishedSheetFresh(LIVE_SHEETS[key],key);
-      if(!Array.isArray(rows)||!rows.length)throw new Error('The '+key+' worksheet returned no records.');
-      return [key,rows];
-    }));
+    required.forEach(key=>{
+      if(!Array.isArray(data[key]))throw new Error('Apps Script did not return the '+key+' dataset.');
+    });
     const targets={girls:g,women:w,byclub:b,allstars:a};
-    for(const [key,rows] of loaded){
-      const target=targets[key];
-      target.splice(0,target.length,...rows);
-    }
-    // Apply the same club-name consolidation to the newly fetched live records.
+    required.forEach(key=>targets[key].splice(0,targets[key].length,...data[key]));
+
+    // Refresh the shared club metadata and follow-ups from the same response.
+    sharedClubMaster={};
+    (data.clubs||[]).forEach(x=>{
+      if(x.clubName)sharedClubMaster[canonicalClubName(x.clubName)]={
+        clubName:String(x.clubName),localAuthority:String(x.localAuthority||''),
+        league:String(x.league||''),cdoOverride:String(x.cdoOverride||'')
+      };
+    });
+    CDO_BY_AUTHORITY={};
+    (data.allocations||[]).forEach(x=>{if(x.authority)CDO_BY_AUTHORITY[String(x.authority).trim()]=String(x.cdo||'');});
+    CDO_NAMES=[...new Set(Object.values(CDO_BY_AUTHORITY).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    sharedDevelopmentFollowups={};
+    (data.followups||[]).forEach(x=>{if(x.clubName)sharedDevelopmentFollowups[x.clubName]={status:String(x.status||'Not started'),notes:String(x.notes||''),updatedAt:String(x.updatedAt||'')};});
+    clubMasterLoaded=true;
+    clubMasterStatus='Shared dashboard data loaded';
+
     [g,w].forEach(rows=>rows.forEach(r=>{r['Club Name']=mergedClubName(r['Club Name']);}));
     [b,a].forEach(rows=>rows.forEach(r=>{if('Club' in r)r.Club=mergedClubName(r.Club);}));
-    // Refresh every derived value that was previously calculated from the embedded snapshot.
     fixturesG=sum(g,'Fixtures Played');
     fixturesW=sum(w,'Fixtures Played');
     clubs=uniqueClubNames([...g.map(x=>x['Club Name']),...w.map(x=>x['Club Name']),...b.map(x=>x.Club),...a.map(x=>x.Club)]);
     yoy26=yoyAggregate([...g,...w]);
+
     init();
     renderOverviewInsights();
     renderWhatsGoingWell();
     renderWhereChallenges();
     renderYoY();
     if(typeof renderActionCentre==='function')renderActionCentre();
-    status.textContent='Live database connected — Girls, Women, By Club and All Stars / Dynamos data loaded successfully.';
+    status.textContent='Live database connected — all four datasets and shared club information loaded successfully.';
     status.style.background='#edf8f1';
     status.style.borderColor='#c7e8d2';
     status.style.color='#17643b';
   }catch(err){
     console.error('Live database startup failed:',err);
-    status.textContent='Live database connection failed. Dashboard data has not been loaded. Please check that the Google Sheets worksheets are published and accessible. Details: '+(err&&err.message?err.message:String(err));
+    status.textContent='Live database connection failed: '+(err&&err.message?err.message:String(err));
     status.style.background='#fff4e8';
     status.style.borderColor='#f0d2ad';
     status.style.color='#8a4b08';
-    document.querySelectorAll('.panel').forEach(panel=>{panel.classList.remove('active');});
+    document.querySelectorAll('.panel').forEach(panel=>panel.classList.remove('active'));
     const overview=document.getElementById('overview');
-    if(overview){overview.classList.add('active');overview.innerHTML='<div class="card"><h2>Live data unavailable</h2><p>The dashboard could not load its required Google Sheets data, so it has not displayed stale figures.</p><p class="note">'+String(err&&err.message?err.message:err).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))+'</p></div>';}
+    if(overview){
+      overview.classList.add('active');
+      const safe=String(err&&err.message?err.message:err).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      overview.innerHTML='<div class="card"><h2>Live data unavailable</h2><p>The dashboard could not load its live data, so it has not displayed stale figures.</p><p class="note">'+safe+'</p></div>';
+    }
   }
 })();
 
