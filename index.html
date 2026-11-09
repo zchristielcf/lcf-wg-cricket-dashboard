@@ -1230,7 +1230,7 @@ function requestDashboardDataJSONP(){
     renderOverviewInsights();
     renderWhatsGoingWell();
     renderWhereChallenges();
-    renderYoY();
+    // Legacy renderYoY() removed: its old controls are no longer in this dashboard.
     if(typeof renderActionCentre==='function')renderActionCentre();
     status.textContent='Live database connected — all four datasets and shared club information loaded successfully.';
     status.style.background='#edf8f1';
